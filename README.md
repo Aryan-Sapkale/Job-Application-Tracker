@@ -1,1 +1,723 @@
 # Job-Application-Tracker
+
+
+import { useState, useEffect } from "react";
+import axios from "axios";
+import "./App.css";
+
+const API_URL = "http://localhost:5000/api/jobs";
+
+
+const emptyForm = {
+  company: "",
+  role: "",
+  location: "",
+  status: "Applied",
+  date: "",
+  interviewDate: "",
+  recruiterName: "",
+  recruiterEmail: "",
+  notes: "",
+};
+
+
+function App() {
+  const [applications, setApplications] = useState([]);
+  const [showForm, setShowForm] = useState(false);
+  const [form, setForm] = useState(emptyForm);
+  const [editingId, setEditingId] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const [searchTerm, setSearchTerm] = useState("");
+  const [statusFilter, setStatusFilter] = useState("All");
+
+  // Load applications from MongoDB
+  useEffect(() => {
+    async function fetchApplications() {
+      try {
+        const response = await axios.get(API_URL);
+        setApplications(response.data);
+        setError("");
+      } catch (err) {
+        setError(
+          "Could not load applications. Check that your backend and MongoDB are running."
+        );
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    fetchApplications();
+  }, []);
+
+  // Handle form input changes
+  function handleChange(event) {
+    const { name, value } = event.target;
+
+    setForm((previousForm) => ({
+      ...previousForm,
+      [name]: value,
+    }));
+  }
+
+  // Add or update an application
+  async function handleSubmit(event) {
+    event.preventDefault();
+    setSaving(true);
+    setError("");
+
+    try {
+      const payload = {
+        ...form,
+        date: form.date || undefined,
+      };
+
+      let response;
+
+      if (editingId) {
+        response = await axios.put(
+          `${API_URL}/${editingId}`,
+          payload
+        );
+
+        setApplications((previousApplications) =>
+          previousApplications.map((application) =>
+            application._id === editingId
+              ? response.data
+              : application
+          )
+        );
+      } else {
+        response = await axios.post(API_URL, payload);
+
+        setApplications((previousApplications) => [
+          response.data,
+          ...previousApplications,
+        ]);
+      }
+
+      setForm({ ...emptyForm });
+      setEditingId(null);
+      setShowForm(false);
+    } catch (err) {
+      setError(
+        err.response?.data?.message ||
+          "Could not save the application. Please check your backend."
+      );
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  // Load an application into the form for editing
+  
+  // Load an application into the form for editing
+  function handleEdit(application) {
+    setForm({
+      company: application.company || "",
+      role: application.role || "",
+      location: application.location || "",
+      status: application.status || "Applied",
+      date: application.date
+        ? application.date.substring(0, 10)
+        : "",
+      interviewDate: application.interviewDate
+        ? new Date(application.interviewDate)
+            .toISOString()
+            .slice(0, 16)
+        : "",
+      recruiterName: application.recruiterName || "",
+      recruiterEmail: application.recruiterEmail || "",
+      notes: application.notes || "",
+    });
+
+    setEditingId(application._id);
+    setShowForm(true);
+    setError("");
+  }
+
+
+  // Delete an application
+  async function deleteApplication(id) {
+    const confirmed = window.confirm(
+      "Are you sure you want to delete this application?"
+    );
+
+    if (!confirmed) return;
+
+    setError("");
+
+    try {
+      await axios.delete(`${API_URL}/${id}`);
+
+      setApplications((previousApplications) =>
+        previousApplications.filter(
+          (application) => application._id !== id
+        )
+      );
+    } catch (err) {
+      setError(
+        err.response?.data?.message ||
+          "Could not delete the application."
+      );
+    }
+  }
+
+  // Dashboard statistics
+  const interviews = applications.filter(
+    (application) => application.status === "Interview"
+  ).length;
+
+  const offers = applications.filter(
+    (application) => application.status === "Offered"
+  ).length;
+
+  const rejected = applications.filter(
+    (application) => application.status === "Rejected"
+  ).length;
+ 
+  // Find upcoming interviews
+  const upcomingInterviews = applications
+    .filter((application) => {
+      if (
+        application.status !== "Interview" ||
+        !application.interviewDate
+      ) {
+        return false;
+      }
+
+      return new Date(application.interviewDate) >= new Date();
+    })
+    .sort(
+      (a, b) =>
+        new Date(a.interviewDate) - new Date(b.interviewDate)
+    );
+
+const filteredApplications = applications.filter((application) => {
+  const search = searchTerm.toLowerCase();
+
+  const matchesSearch =
+    (application.company || "").toLowerCase().includes(search) ||
+    (application.role || "").toLowerCase().includes(search);
+
+  const matchesStatus =
+    statusFilter === "All" || application.status === statusFilter;
+
+  return matchesSearch && matchesStatus;
+});
+
+
+  // Reset the form and open it for a new application
+  function handleAddApplication() {
+    setForm({ ...emptyForm });
+    setEditingId(null);
+    setError("");
+    setShowForm(true);
+  }
+
+  // Cancel adding or editing
+  function handleCancel() {
+    setForm({ ...emptyForm });
+    setEditingId(null);
+    setError("");
+    setShowForm(false);
+  }
+
+  return (
+    <div className="app">
+      <aside className="sidebar">
+        <h2>JobTrack</h2>
+        <p className="sidebar-label">WORKSPACE</p>
+        
+<p
+  className="nav-item active"
+  onClick={() => {
+    document
+      .getElementById("dashboard-section")
+      ?.scrollIntoView({ behavior: "smooth" });
+  }}
+>
+  ▦ Dashboard
+</p>
+
+        
+<p
+  className="nav-item"
+  onClick={() => {
+    document
+      .getElementById("applications-section")
+      ?.scrollIntoView({ behavior: "smooth" });
+  }}
+>
+  ▤ Applications
+</p>
+
+        <p className="nav-item">⚙ Settings</p>
+
+        <div className="sidebar-bottom">
+          <div className="avatar">JS</div>
+          <div>
+            <strong>Job Seeker</strong>
+            <p>Career workspace</p>
+          </div>
+        </div>
+      </aside>
+
+      <main className="main-content">
+        <header className="topbar">
+          <div>
+            <p className="eyebrow">WORKSPACE / DASHBOARD</p>
+            <h1>Job Application Tracker</h1>
+            <p className="subtitle">
+              Keep your job search organized and moving forward.
+            </p>
+          </div>
+
+          <button
+            type="button"
+            className="primary-button"
+            onClick={handleAddApplication}
+          >
+            + Add Application
+          </button>
+        </header>
+
+        {error && (
+          <p role="alert" className="error-message">
+            {error}
+          </p>
+        )}
+
+       <section className="stats-grid" id="dashboard-section">
+          
+<div
+ 
+className={`stat-card ${
+  statusFilter === "All" && searchTerm === "" ? "active" : ""
+}`}
+
+  onClick={() => {
+    setStatusFilter("All");
+    setSearchTerm("");
+  }}
+  role="button"
+  tabIndex={0}
+  title="Click to view all applications"
+>
+  <p>Total Applications</p>
+  <h2>{applications.length}</h2>
+  <span>All tracked applications</span>
+</div>
+
+
+          
+<div
+  
+className={`stat-card ${
+  statusFilter === "Interview" ? "active" : ""
+}`}
+
+  onClick={() => setStatusFilter("Interview")}
+  role="button"
+  tabIndex={0}
+  title="Click to view interview applications"
+>
+  <p>Interviews</p>
+  <h2>{interviews}</h2>
+  <span>Interview opportunities</span>
+</div>
+
+
+          
+<div
+ 
+className={`stat-card ${
+  statusFilter === "Offered" ? "active" : ""
+}`}
+
+  onClick={() => setStatusFilter("Offered")}
+  role="button"
+  tabIndex={0}
+  title="Click to view offered applications"
+>
+  <p>Offers</p>
+  <h2>{offers}</h2>
+  <span>Offers received</span>
+</div>
+
+
+<div
+  
+className={`stat-card ${
+  statusFilter === "Rejected" ? "active" : ""
+}`}
+
+  onClick={() => setStatusFilter("Rejected")}
+  role="button"
+  tabIndex={0}
+  title="Click to view rejected applications"
+>
+  <p>Rejected</p>
+  <h2>{rejected}</h2>
+  <span>Closed applications</span>
+</div>
+
+        </section>
+        
+        <section className="upcoming-interviews">
+          <div className="section-heading">
+            <div>
+              <h2>Upcoming Interviews</h2>
+              <p>Keep track of your next interview opportunities.</p>
+            </div>
+
+            <span className="count-badge">
+              {upcomingInterviews.length} upcoming
+            </span>
+          </div>
+
+          {upcomingInterviews.length === 0 ? (
+            <div className="empty-state">
+              <h3>No upcoming interviews</h3>
+              <p>
+                Add an interview date to an application with Interview status
+                to see it here.
+              </p>
+            </div>
+          ) : (
+            <div className="upcoming-interviews-list">
+              {upcomingInterviews.map((application) => (
+                <div
+                  className="upcoming-interview-item"
+                  key={application._id}
+                >
+                  <div>
+                    <h3>{application.company}</h3>
+                    <p>{application.role}</p>
+                    <p>
+                      {new Date(application.interviewDate).toLocaleString()}
+                    </p>
+                    {application.recruiterName && (
+                      <p>Recruiter: {application.recruiterName}</p>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+
+
+        {showForm && (
+          <section className="form-card">
+            <h2>
+              {editingId
+                ? "Edit Job Application"
+                : "Add a Job Application"}
+            </h2>
+
+            <form onSubmit={handleSubmit}>
+              <div className="form-grid">
+                <label>
+                  Company Name *
+                  <input
+                    name="company"
+                    value={form.company}
+                    onChange={handleChange}
+                    placeholder="e.g. Google"
+                    required
+                  />
+                </label>
+
+                <label>
+                  Job Title *
+                  <input
+                    name="role"
+                    value={form.role}
+                    onChange={handleChange}
+                    placeholder="e.g. Data Analyst"
+                    required
+                  />
+                </label>
+
+                <label>
+                  Location
+                  <input
+                    name="location"
+                    value={form.location}
+                    onChange={handleChange}
+                    placeholder="e.g. Pune"
+                  />
+                </label>
+
+                <label>
+                  Application Date
+                  <input
+                    type="date"
+                    name="date"
+                    value={form.date}
+                    onChange={handleChange}
+                  />
+                </label>
+
+                <label>
+                  Application Status
+                  <select
+                    name="status"
+                    value={form.status}
+                    onChange={handleChange}
+                  >
+                    <option>Applied</option>
+                    <option>Assessment</option>
+                    <option>Interview</option>
+                    <option>Offered</option>
+                    <option>Rejected</option>
+                  </select>
+                </label>
+                
+                <label>
+                  Interview Date & Time
+                  <input
+                    type="datetime-local"
+                    name="interviewDate"
+                    value={form.interviewDate}
+                    onChange={handleChange}
+                  />
+                </label>
+
+                <label>
+                  Recruiter Name
+                  <input
+                    name="recruiterName"
+                    value={form.recruiterName}
+                    onChange={handleChange}
+                    placeholder="e.g. Rahul Sharma"
+                  />
+                </label>
+
+                <label>
+                  Recruiter Email
+                  <input
+                    type="email"
+                    name="recruiterEmail"
+                    value={form.recruiterEmail}
+                    onChange={handleChange}
+                    placeholder="e.g. recruiter@company.com"
+                  />
+                </label>
+
+                <label>
+                  Notes
+                  <textarea
+                    name="notes"
+                    value={form.notes}
+                    onChange={handleChange}
+                    placeholder="Interview preparation, follow-up, etc."
+                    rows={3}
+                  />
+                </label>
+
+              </div>
+
+              <div className="form-actions">
+                <button
+                  type="button"
+                  className="secondary-button"
+                  onClick={handleCancel}
+                >
+                  Cancel
+                </button>
+
+                <button
+                  type="submit"
+                  className="primary-button"
+                  disabled={saving}
+                >
+                  {saving
+                    ? "Saving..."
+                    : editingId
+                      ? "Save Changes"
+                      : "Add Application"}
+                </button>
+              </div>
+            </form>
+          </section>
+        )}
+
+        <section className="applications-card">
+          <div className="section-heading">
+            <div>
+             <h2 id="applications-section">My Applications</h2>
+              <p>Manage and track your opportunities.</p>
+            </div>
+            
+
+<div className="application-filters">
+  <input
+    type="text"
+    className="search-input"
+    placeholder="Search by company or job title..."
+    value={searchTerm}
+    onChange={(event) => setSearchTerm(event.target.value)}
+  />
+
+  <select
+    className="status-filter"
+    value={statusFilter}
+    onChange={(event) => setStatusFilter(event.target.value)}
+  >
+    <option value="All">All Statuses</option>
+    <option value="Applied">Applied</option>
+    <option value="Assessment">Assessment</option>
+    <option value="Interview">Interview</option>
+    <option value="Offered">Offered</option>
+    <option value="Rejected">Rejected</option>
+  </select>
+  
+<button
+  type="button"
+  className="secondary-button"
+  onClick={() => {
+    setSearchTerm("");
+    setStatusFilter("All");
+  }}
+>
+  Clear Filters
+</button>
+
+</div>
+
+
+
+            <span className="count-badge">
+              {applications.length} records
+            </span>
+          </div>
+
+          {loading ? (
+            <div className="empty-state">
+              <p>Loading applications...</p>
+            </div>
+          ) : applications.length === 0 ? (
+            <div className="empty-state">
+              <div className="empty-icon">▤</div>
+              <h3>No applications yet</h3>
+              <p>
+                Start tracking your job search by adding your first
+                application.
+              </p>
+
+              <button
+                type="button"
+                className="primary-button"
+                onClick={handleAddApplication}
+              >
+                + Add Your First Application
+              </button>
+            </div>
+          ) : (
+            <div className="table-wrapper">
+              <table>
+                
+<thead>
+  <tr>
+    <th>Company / Role</th>
+    <th>Location</th>
+    <th>Date</th>
+    <th>Status</th>
+    <th>Interview Details</th>
+    <th>Action</th>
+  </tr>
+</thead>
+
+
+                
+<tbody>
+  {filteredApplications.length === 0 ? (
+    <tr>
+      <td colSpan="5" className="empty-message">
+        No applications found. Try changing your search or filters.
+      </td>
+    </tr>
+  ) : (
+    filteredApplications.map((application) => (
+     
+<tr key={application._id}>
+  <td>
+    <strong>{application.company}</strong>
+    <p className="role-text">{application.role}</p>
+  </td>
+
+  <td>{application.location || "—"}</td>
+
+  <td>
+    {application.date
+      ? new Date(application.date).toLocaleDateString()
+      : "—"}
+  </td>
+
+  <td>
+    <span
+      className={`status ${(application.status || "Applied").toLowerCase()}`}
+    >
+      {application.status || "Applied"}
+    </span>
+  </td>
+
+  <td>
+    {application.interviewDate ? (
+      <>
+        <p>
+          <strong>
+            {new Date(application.interviewDate).toLocaleString()}
+          </strong>
+        </p>
+        {application.recruiterName && (
+          <p>Recruiter: {application.recruiterName}</p>
+        )}
+        {application.recruiterEmail && (
+          <p>{application.recruiterEmail}</p>
+        )}
+        {application.notes && <p>Notes: {application.notes}</p>}
+      </>
+    ) : (
+      "—"
+    )}
+  </td>
+
+  <td>
+    <button
+      type="button"
+      className="primary-button"
+      onClick={() => handleEdit(application)}
+    >
+      Edit
+    </button>
+
+    <button
+      type="button"
+      className="delete-button"
+      onClick={() => deleteApplication(application._id)}
+    >
+      Delete
+    </button>
+  </td>
+</tr>
+
+    ))
+  )}
+</tbody>
+
+              </table>
+            </div>
+          )}
+        </section>
+
+        <footer>JobTrack · Job search, organized.</footer>
+      </main>
+    </div>
+  );
+}
+
+export default App;
