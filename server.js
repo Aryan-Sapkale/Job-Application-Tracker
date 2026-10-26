@@ -1,0 +1,104 @@
+const express = require("express");
+const mongoose = require("mongoose");
+const cors = require("cors");
+require("dotenv").config();
+
+const Job = require("./models/Job");
+
+const app = express();
+const PORT = process.env.PORT || 5000;
+
+// Middleware
+app.use(cors());
+app.use(express.json());
+
+// MongoDB connection
+mongoose
+  .connect(
+    process.env.MONGODB_URI ||
+      "mongodb://127.0.0.1:27017/jobTracker"
+  )
+  .then(() => {
+    console.log("MongoDB connected successfully!");
+  })
+  .catch((error) => {
+    console.error("MongoDB connection error:", error.message);
+  });
+
+// Home route
+app.get("/", (req, res) => {
+  res.send("Job Application Tracker API is running!");
+});
+
+// Health check
+app.get("/api/health", (req, res) => {
+  res.json({
+    message: "Backend is working",
+    database:
+      mongoose.connection.readyState === 1
+        ? "Connected"
+        : "Not connected",
+  });
+});
+
+// Get all jobs
+app.get("/api/jobs", async (req, res) => {
+  try {
+    const jobs = await Job.find().sort({ createdAt: -1 });
+    res.json(jobs);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// Add a job
+app.post("/api/jobs", async (req, res) => {
+  try {
+    const job = await Job.create(req.body);
+    res.status(201).json(job);
+  } catch (error) {
+    res.status(400).json({ message: error.message });
+  }
+});
+
+// Update a job
+app.put("/api/jobs/:id", async (req, res) => {
+  try {
+    const job = await Job.findByIdAndUpdate(
+      req.params.id,
+      req.body,
+      {
+        new: true,
+        runValidators: true,
+      }
+    );
+
+    if (!job) {
+      return res.status(404).json({ message: "Job not found" });
+    }
+
+    res.json(job);
+  } catch (error) {
+    res.status(400).json({ message: error.message });
+  }
+});
+
+// Delete a job
+app.delete("/api/jobs/:id", async (req, res) => {
+  try {
+    const job = await Job.findByIdAndDelete(req.params.id);
+
+    if (!job) {
+      return res.status(404).json({ message: "Job not found" });
+    }
+
+    res.json({ message: "Job deleted successfully" });
+  } catch (error) {
+    res.status(400).json({ message: error.message });
+  }
+});
+
+// Start server
+app.listen(PORT, () => {
+  console.log(`Server running at http://localhost:${PORT}`);
+});
